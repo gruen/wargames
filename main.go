@@ -162,36 +162,41 @@ func handleWar(playerA, playerB *Player, warPile []Card, stats *GameStats, total
         return 0 // No winner due to time out
     }
 
-    for i := 0; i < 3; i++ {
-        cardA, shuffledA := drawCard(playerA)
-        cardB, shuffledB := drawCard(playerB)
-        stats.ShufflesA += shuffledA
-        stats.ShufflesB += shuffledB
-        *totalTime += (shuffledA + shuffledB) * shuffleTime
-
-        if (cardA == Card{}) {
-            return 2 // Player B wins
+    // Function to draw cards and update stats
+    drawCardsForWar := func(player *Player, shuffles *int, maxCards int) []Card {
+        cards := make([]Card, 0, maxCards)
+        for i := 0; i < maxCards; i++ {
+            card, shuffled := drawCard(player)
+            if shuffled > 0 {
+                *shuffles++
+                *totalTime += shuffleTime
+            }
+            if (card == Card{}) {
+                break // No more cards available
+            }
+            cards = append(cards, card)
         }
-        if (cardB == Card{}) {
-            return 1 // Player A wins
-        }
-
-        warPile = append(warPile, cardA, cardB)
+        return cards
     }
 
-    cardA, shuffledA := drawCard(playerA)
-    cardB, shuffledB := drawCard(playerB)
-    stats.ShufflesA += shuffledA
-    stats.ShufflesB += shuffledB
-    *totalTime += (shuffledA + shuffledB) * shuffleTime
+    // Draw cards for both players (up to 4 cards each)
+    cardsA := drawCardsForWar(playerA, &stats.ShufflesA, 4)
+    cardsB := drawCardsForWar(playerB, &stats.ShufflesB, 4)
 
-    if (cardA == Card{}) {
+    // Check if either player has no cards left
+    if len(cardsA) == 0 {
         return 2 // Player B wins
     }
-    if (cardB == Card{}) {
+    if len(cardsB) == 0 {
         return 1 // Player A wins
     }
 
+    // Add face-down cards to the war pile
+    warPile = append(warPile, cardsA[:len(cardsA)-1]...)
+    warPile = append(warPile, cardsB[:len(cardsB)-1]...)
+
+    // Compare the last card from each player
+    cardA, cardB := cardsA[len(cardsA)-1], cardsB[len(cardsB)-1]
     warPile = append(warPile, cardA, cardB)
 
     if cardA.Rank == cardB.Rank {
