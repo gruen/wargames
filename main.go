@@ -156,75 +156,81 @@ func playGame(handTime, shuffleTime int, includeJokers bool, maxGameTime int) Ga
     return stats
 }
 
+func drawWarCards(player *Player, shuffles *int, totalTime *int, handTime, shuffleTime int) []Card {
+    cards := make([]Card, 0, 4)
+    for i := 0; i < 4; i++ {
+        card, shuffled := drawCard(player)
+        if shuffled > 0 {
+            *shuffles++
+            *totalTime += shuffleTime
+        }
+        *totalTime += handTime // Time for drawing each card
+        if (card == Card{}) {
+            break // No more cards available
+        }
+        cards = append(cards, card)
+    }
+    return cards
+}
+
 func handleWar(playerA, playerB *Player, warPile []Card, stats *GameStats, totalTime *int, handTime, shuffleTime, maxGameTime, depth int) WarResult {
     stats.Wars++
     stats.TotalWarDepth += depth
-    *totalTime += handTime
+    *totalTime += handTime // Time for the initial war comparison
 
     if *totalTime >= maxGameTime {
-        // In case of timeout, consider it a win for the player with more cards
-        if len(playerA.DrawPile) + len(playerA.WinningsPile) > len(playerB.DrawPile) + len(playerB.WinningsPile) {
-            return WarResult{Winner: 1, PlayerATricks: 1}
-        } else {
-            return WarResult{Winner: 2, PlayerBTricks: 1}
-        }
+        return timeoutResult(playerA, playerB)
     }
 
-    // Function to draw cards and update stats
-    drawCardsForWar := func(player *Player, shuffles *int, maxCards int) []Card {
-        cards := make([]Card, 0, maxCards)
-        for i := 0; i < maxCards; i++ {
-            card, shuffled := drawCard(player)
-            if shuffled > 0 {
-                *shuffles++
-                *totalTime += shuffleTime
-            }
-            if (card == Card{}) {
-                break // No more cards available
-            }
-            cards = append(cards, card)
-        }
-        return cards
+    cardsA := drawWarCards(playerA, &stats.ShufflesA, totalTime, handTime, shuffleTime)
+    cardsB := drawWarCards(playerB, &stats.ShufflesB, totalTime, handTime, shuffleTime)
+
+    if len(cardsA) == 0 || len(cardsB) == 0 {
+        return determineWarWinner(cardsA, cardsB)
     }
 
-    // Draw cards for both players (up to 4 cards each)
-    cardsA := drawCardsForWar(playerA, &stats.ShufflesA, 4)
-    cardsB := drawCardsForWar(playerB, &stats.ShufflesB, 4)
-
-    // Check if either player has no cards left
-    if len(cardsA) == 0 {
-        return WarResult{Winner: 2, PlayerBTricks: 1} // Player B wins
-    } else if len(cardsB) == 0 {
-        return WarResult{Winner: 1, PlayerATricks: 1} // Player A wins
-    }
-
-    // Add face-down cards to the war pile
     warPile = append(warPile, cardsA[:len(cardsA)-1]...)
     warPile = append(warPile, cardsB[:len(cardsB)-1]...)
 
-    // Compare the last card from each player
     cardA, cardB := cardsA[len(cardsA)-1], cardsB[len(cardsB)-1]
     warPile = append(warPile, cardA, cardB)
 
     if cardA.Rank == cardB.Rank {
-        stats.DeepWars++
-        // Check if either player has cards left for another war
-        remainingCardsA := len(playerA.DrawPile) + len(playerA.WinningsPile)
-        remainingCardsB := len(playerB.DrawPile) + len(playerB.WinningsPile)
-        
-        if remainingCardsA == 0 {
-            return WarResult{Winner: 2, PlayerBTricks: 1} // Player B wins
-        } else if remainingCardsB == 0 {
-            return WarResult{Winner: 1, PlayerATricks: 1} // Player A wins
-        }
-        
-        // Both players have cards, continue the war
-        return handleWar(playerA, playerB, warPile, stats, totalTime, handTime, shuffleTime, maxGameTime, depth+1)
-    } else if cardA.Rank > cardB.Rank {
-        return WarResult{Winner: 1, PlayerATricks: 1} // Player A wins
-    } else {
-        return WarResult{Winner: 2, PlayerBTricks: 1} // Player B wins
+        return handleDeepWar(playerA, playerB, warPile, stats, totalTime, handTime, shuffleTime, maxGameTime, depth)
     }
+
+    if cardA.Rank > cardB.Rank {
+        return WarResult{Winner: 1, PlayerATricks: 1}
+    }
+    return WarResult{Winner: 2, PlayerBTricks: 1}
+}
+
+func timeoutResult(playerA, playerB *Player) WarResult {
+    if len(playerA.DrawPile)+len(playerA.WinningsPile) > len(playerB.DrawPile)+len(playerB.WinningsPile) {
+        return WarResult{Winner: 1, PlayerATricks: 1}
+    }
+    return WarResult{Winner: 2, PlayerBTricks: 1}
+}
+
+func determineWarWinner(cardsA, cardsB []Card) WarResult {
+    if len(cardsA) == 0 {
+        return WarResult{Winner: 2, PlayerBTricks: 1}
+    }
+    return WarResult{Winner: 1, PlayerATricks: 1}
+}
+
+func handleDeepWar(playerA, playerB *Player, warPile []Card, stats *GameStats, totalTime *int, handTime, shuffleTime, maxGameTime, depth int) WarResult {
+    stats.DeepWars++
+    remainingCardsA := len(playerA.DrawPile) + len(playerA.WinningsPile)
+    remainingCardsB := len(playerB.DrawPile) + len(playerB.WinningsPile)
+    
+    if remainingCardsA == 0 {
+        return WarResult{Winner: 2, PlayerBTricks: 1}
+    } else if remainingCardsB == 0 {
+        return WarResult{Winner: 1, PlayerATricks: 1}
+    }
+    
+    return handleWar(playerA, playerB, warPile, stats, totalTime, handTime, shuffleTime, maxGameTime, depth+1)
 }
 
 func drawCard(player *Player) (Card, int) {
