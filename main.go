@@ -145,11 +145,6 @@ func playGame(handTime, shuffleTime int, includeJokers bool, maxGameTime int) Ga
         } else {
             stats.Winner = 1 // Player A wins
         }
-    } else {
-        fmt.Printf("Game exceeded %d tricks or %d ms. Possible infinite game.\n", maxTricks, maxGameTime)
-        fmt.Printf("Final state: PlayerA: %d cards, PlayerB: %d cards\n", 
-            len(playerA.DrawPile) + len(playerA.WinningsPile), 
-            len(playerB.DrawPile) + len(playerB.WinningsPile))
     }
 
     stats.GameDuration = time.Duration(totalTime) * time.Millisecond
