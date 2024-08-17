@@ -112,38 +112,50 @@ func playGame(handTime, shuffleTime int, includeJokers bool, maxGameTime int) Ga
         stats.Tricks++
         totalTime += handTime
 
+        // Check if we've exceeded the time limit
+        if totalTime >= maxGameTime {
+            result := timeoutResult(&playerA, &playerB)
+            stats.PlayerATricks += result.PlayerATricks
+            stats.PlayerBTricks += result.PlayerBTricks
+            stats.Winner = result.Winner
+            stats.Finished = true
+            break
+        }
+
         cardA, shuffledA := drawCard(&playerA)
         cardB, shuffledB := drawCard(&playerB)
         stats.ShufflesA += shuffledA
         stats.ShufflesB += shuffledB
         totalTime += (shuffledA + shuffledB) * shuffleTime
 
-		if cardA.Rank == cardB.Rank {
-			warPile := []Card{cardA, cardB}
-			result := handleWar(&playerA, &playerB, warPile, &stats, &totalTime, handTime, shuffleTime, maxGameTime, 1)
-			stats.PlayerATricks += result.PlayerATricks
-			stats.PlayerBTricks += result.PlayerBTricks
-			if result.Winner == 1 {
-				playerA.WinningsPile = append(playerA.WinningsPile, warPile...)
-			} else if result.Winner == 2 {
-				playerB.WinningsPile = append(playerB.WinningsPile, warPile...)
-			}
-		} else if cardA.Rank > cardB.Rank {
-			playerA.WinningsPile = append(playerA.WinningsPile, cardA, cardB)
-			stats.PlayerATricks++
-		} else {
-			playerB.WinningsPile = append(playerB.WinningsPile, cardA, cardB)
-			stats.PlayerBTricks++
-		}
+        if cardA.Rank == cardB.Rank {
+            warPile := []Card{cardA, cardB}
+            result := handleWar(&playerA, &playerB, warPile, &stats, &totalTime, handTime, shuffleTime, maxGameTime, 1)
+            stats.PlayerATricks += result.PlayerATricks
+            stats.PlayerBTricks += result.PlayerBTricks
+            if result.Winner == 1 {
+                playerA.WinningsPile = append(playerA.WinningsPile, warPile...)
+            } else if result.Winner == 2 {
+                playerB.WinningsPile = append(playerB.WinningsPile, warPile...)
+            }
+        } else if cardA.Rank > cardB.Rank {
+            playerA.WinningsPile = append(playerA.WinningsPile, cardA, cardB)
+            stats.PlayerATricks++
+        } else {
+            playerB.WinningsPile = append(playerB.WinningsPile, cardA, cardB)
+            stats.PlayerBTricks++
+        }
     }
 
-    stats.Finished = len(playerA.DrawPile) + len(playerA.WinningsPile) == 0 || 
-        len(playerB.DrawPile) + len(playerB.WinningsPile) == 0
-    if stats.Finished {
-        if len(playerA.DrawPile) + len(playerA.WinningsPile) == 0 {
-            stats.Winner = 2 // Player B wins
-        } else {
-            stats.Winner = 1 // Player A wins
+    if !stats.Finished {
+        stats.Finished = len(playerA.DrawPile) + len(playerA.WinningsPile) == 0 || 
+            len(playerB.DrawPile) + len(playerB.WinningsPile) == 0
+        if stats.Finished {
+            if len(playerA.DrawPile) + len(playerA.WinningsPile) == 0 {
+                stats.Winner = 2 // Player B wins
+            } else {
+                stats.Winner = 1 // Player A wins
+            }
         }
     }
 
@@ -201,10 +213,17 @@ func handleWar(playerA, playerB *Player, warPile []Card, stats *GameStats, total
 }
 
 func timeoutResult(playerA, playerB *Player) WarResult {
-    if len(playerA.DrawPile)+len(playerA.WinningsPile) > len(playerB.DrawPile)+len(playerB.WinningsPile) {
+    totalCardsA := len(playerA.DrawPile) + len(playerA.WinningsPile)
+    totalCardsB := len(playerB.DrawPile) + len(playerB.WinningsPile)
+    
+    if totalCardsA > totalCardsB {
         return WarResult{Winner: 1, PlayerATricks: 1}
+    } else if totalCardsB > totalCardsA {
+        return WarResult{Winner: 2, PlayerBTricks: 1}
+    } else {
+        // In case of a tie, we'll consider it a draw
+        return WarResult{Winner: 0, PlayerATricks: 0, PlayerBTricks: 0}
     }
-    return WarResult{Winner: 2, PlayerBTricks: 1}
 }
 
 func determineWarWinner(cardsA, cardsB []Card) WarResult {
