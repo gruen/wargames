@@ -15,15 +15,21 @@ type Card struct {
 	Rank int
 }
 
+type Player struct {
+	DrawPile     []Card
+	WinningsPile []Card
+}
+
 type GameStats struct {
-	GameNumber   int
-	Tricks       int
-	Wars         int
-	DeepWars     int
-	ShufflesA    int
-	ShufflesB    int
-	GameDuration time.Duration
-	Finished     bool
+    GameNumber   int
+    Tricks       int
+    Wars         int
+    DeepWars     int
+    TotalWarDepth int
+    ShufflesA    int
+    ShufflesB    int
+    GameDuration time.Duration
+    Finished     bool
 }
 
 func main() {
@@ -63,9 +69,6 @@ func parseArgs() (int, int, bool, int64, int, int) {
 func runSimulations(gamesToPlay, handTime, shuffleTime int, includeJokers bool, maxGameTime int) []GameStats {
 	stats := make([]GameStats, gamesToPlay)
 	for i := 0; i < gamesToPlay; i++ {
-		if i%100 == 0 {
-			fmt.Printf("Simulated %d games...\n", i)
-		}
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -81,51 +84,123 @@ func runSimulations(gamesToPlay, handTime, shuffleTime int, includeJokers bool, 
 }
 
 func playGame(handTime, shuffleTime int, includeJokers bool, maxGameTime int) GameStats {
-	deck := createDeck(includeJokers)
-	shuffleDeck(deck)
+    deck := createDeck(includeJokers)
+    shuffleDeck(deck)
 
-	playerA := deck[:len(deck)/2]
-	playerB := deck[len(deck)/2:]
+    playerA := Player{DrawPile: deck[:len(deck)/2]}
+    playerB := Player{DrawPile: deck[len(deck)/2:]}
 
-	stats := GameStats{}
-	totalTime := 0 // in milliseconds
-	maxTricks := 100000 // Safety mechanism to prevent infinite games
+    stats := GameStats{}
+    totalTime := 0 // in milliseconds
+    maxTricks := 100000 // Safety mechanism to prevent infinite games
 
-	for len(playerA) > 0 && len(playerB) > 0 && stats.Tricks < maxTricks && totalTime < maxGameTime {
-		stats.Tricks++
-		totalTime += handTime
+    for len(playerA.DrawPile) + len(playerA.WinningsPile) > 0 && 
+        len(playerB.DrawPile) + len(playerB.WinningsPile) > 0 && 
+        stats.Tricks < maxTricks && totalTime < maxGameTime {
+        
+        stats.Tricks++
+        totalTime += handTime
 
-		cardA := playerA[0]
-		cardB := playerB[0]
-		playerA = playerA[1:]
-		playerB = playerB[1:]
+        cardA, shuffledA := drawCard(&playerA)
+        cardB, shuffledB := drawCard(&playerB)
+        stats.ShufflesA += shuffledA
+        stats.ShufflesB += shuffledB
+        totalTime += (shuffledA + shuffledB) * shuffleTime
 
-		if cardA.Rank == cardB.Rank {
-			warPile := []Card{cardA, cardB}
-			warResult := handleWar(&playerA, &playerB, warPile, &stats, &totalTime, handTime, maxGameTime)
-			playerA, playerB = warResult.A, warResult.B
-		} else if cardA.Rank > cardB.Rank {
-			playerA = append(playerA, cardA, cardB)
-		} else {
-			playerB = append(playerB, cardA, cardB)
-		}
+        if cardA.Rank == cardB.Rank {
+            warPile := []Card{cardA, cardB}
+            winner := handleWar(&playerA, &playerB, warPile, &stats, &totalTime, handTime, shuffleTime, maxGameTime, 1) // Added depth parameter (1)
+            if winner == 1 {
+                playerA.WinningsPile = append(playerA.WinningsPile, warPile...)
+            } else if winner == 2 {
+                playerB.WinningsPile = append(playerB.WinningsPile, warPile...)
+            }
+        } else if cardA.Rank > cardB.Rank {
+            playerA.WinningsPile = append(playerA.WinningsPile, cardA, cardB)
+        } else {
+            playerB.WinningsPile = append(playerB.WinningsPile, cardA, cardB)
+        }
+    }
 
-		_, shufflesA := shuffleIfNeeded(playerA, shuffleTime)
-		_, shufflesB := shuffleIfNeeded(playerB, shuffleTime)
-		stats.ShufflesA += shufflesA
-		stats.ShufflesB += shufflesB
-		totalTime += (shufflesA + shufflesB) * shuffleTime
-	}
+    stats.Finished = len(playerA.DrawPile) + len(playerA.WinningsPile) == 0 || 
+        len(playerB.DrawPile) + len(playerB.WinningsPile) == 0
+    if !stats.Finished {
+        fmt.Printf("Game exceeded %d tricks or %d ms. Possible infinite game.\n", maxTricks, maxGameTime)
+        fmt.Printf("Final state: PlayerA: %d cards, PlayerB: %d cards\n", 
+            len(playerA.DrawPile) + len(playerA.WinningsPile), 
+            len(playerB.DrawPile) + len(playerB.WinningsPile))
+    }
 
-	stats.Finished = len(playerA) == 0 || len(playerB) == 0
-	if !stats.Finished {
-		fmt.Printf("Game exceeded %d tricks or %d ms. Possible infinite game.\n", maxTricks, maxGameTime)
-		fmt.Printf("Final state: PlayerA: %d cards, PlayerB: %d cards\n", len(playerA), len(playerB))
-	}
-
-	stats.GameDuration = time.Duration(totalTime) * time.Millisecond
-	return stats
+    stats.GameDuration = time.Duration(totalTime) * time.Millisecond
+    return stats
 }
+
+func drawCard(player *Player) (Card, int) {
+	if len(player.DrawPile) == 0 {
+		if len(player.WinningsPile) == 0 {
+			return Card{}, 0
+		}
+		player.DrawPile = player.WinningsPile
+		player.WinningsPile = []Card{}
+		shuffleDeck(player.DrawPile)
+		return player.DrawPile[0], 1
+	}
+	card := player.DrawPile[0]
+	player.DrawPile = player.DrawPile[1:]
+	return card, 0
+}
+
+func handleWar(playerA, playerB *Player, warPile []Card, stats *GameStats, totalTime *int, handTime, shuffleTime, maxGameTime, depth int) int {
+    stats.Wars++
+    stats.TotalWarDepth += depth
+    *totalTime += handTime
+
+    if *totalTime >= maxGameTime {
+        return 0 // No winner due to time out
+    }
+
+    for i := 0; i < 3; i++ {
+        cardA, shuffledA := drawCard(playerA)
+        cardB, shuffledB := drawCard(playerB)
+        stats.ShufflesA += shuffledA
+        stats.ShufflesB += shuffledB
+        *totalTime += (shuffledA + shuffledB) * shuffleTime
+
+        if (cardA == Card{}) {
+            return 2 // Player B wins
+        }
+        if (cardB == Card{}) {
+            return 1 // Player A wins
+        }
+
+        warPile = append(warPile, cardA, cardB)
+    }
+
+    cardA, shuffledA := drawCard(playerA)
+    cardB, shuffledB := drawCard(playerB)
+    stats.ShufflesA += shuffledA
+    stats.ShufflesB += shuffledB
+    *totalTime += (shuffledA + shuffledB) * shuffleTime
+
+    if (cardA == Card{}) {
+        return 2 // Player B wins
+    }
+    if (cardB == Card{}) {
+        return 1 // Player A wins
+    }
+
+    warPile = append(warPile, cardA, cardB)
+
+    if cardA.Rank == cardB.Rank {
+        stats.DeepWars++
+        return handleWar(playerA, playerB, warPile, stats, totalTime, handTime, shuffleTime, maxGameTime, depth+1)
+    } else if cardA.Rank > cardB.Rank {
+        return 1 // Player A wins
+    } else {
+        return 2 // Player B wins
+    }
+}
+
 
 func createDeck(includeJokers bool) []Card {
 	deck := make([]Card, 0, 52)
@@ -144,63 +219,6 @@ func shuffleDeck(deck []Card) {
 	rand.Shuffle(len(deck), func(i, j int) {
 		deck[i], deck[j] = deck[j], deck[i]
 	})
-}
-
-func handleWar(playerA, playerB *[]Card, warPile []Card, stats *GameStats, totalTime *int, handTime, maxGameTime int) struct{ A, B []Card } {
-	stats.Wars++
-	*totalTime += handTime
-
-	if *totalTime >= maxGameTime {
-		return struct{ A, B []Card }{*playerA, *playerB}
-	}
-
-	for i := 0; i < 3; i++ {
-		if len(*playerA) > 0 {
-			warPile = append(warPile, (*playerA)[0])
-			*playerA = (*playerA)[1:]
-		}
-		if len(*playerB) > 0 {
-			warPile = append(warPile, (*playerB)[0])
-			*playerB = (*playerB)[1:]
-		}
-	}
-
-	if len(*playerA) == 0 {
-		*playerB = append(*playerB, warPile...)
-		return struct{ A, B []Card }{*playerA, *playerB}
-	}
-	if len(*playerB) == 0 {
-		*playerA = append(*playerA, warPile...)
-		return struct{ A, B []Card }{*playerA, *playerB}
-	}
-
-	cardA := (*playerA)[0]
-	cardB := (*playerB)[0]
-	*playerA = (*playerA)[1:]
-	*playerB = (*playerB)[1:]
-	warPile = append(warPile, cardA, cardB)
-
-	if cardA.Rank == cardB.Rank {
-		stats.DeepWars++
-		return handleWar(playerA, playerB, warPile, stats, totalTime, handTime, maxGameTime)
-	} else if cardA.Rank > cardB.Rank {
-		*playerA = append(*playerA, warPile...)
-	} else {
-		*playerB = append(*playerB, warPile...)
-	}
-
-	return struct{ A, B []Card }{*playerA, *playerB}
-}
-
-func shuffleIfNeeded(player []Card, shuffleTime int) ([]Card, int) {
-	if len(player) == 1 {
-		return player, 0
-	}
-	if len(player) < 4 {
-		shuffleDeck(player)
-		return player, 1
-	}
-	return player, 0
 }
 
 func writeResultsToFile(stats []GameStats, handTime, shuffleTime int, includeJokers bool, seed int64, gamesToPlay, maxGameTime int) {
@@ -234,68 +252,82 @@ func writeResultsToFile(stats []GameStats, handTime, shuffleTime int, includeJok
 }
 
 func printSummaryStatistics(stats []GameStats) {
-	fmt.Printf("Total number of games played: %d\n", len(stats))
+    fmt.Printf("Total number of games played: %d\n", len(stats))
 
-	tricks := make([]float64, len(stats))
-	wars := make([]float64, len(stats))
-	shufflesA := make([]float64, len(stats))
-	shufflesB := make([]float64, len(stats))
-	gameTimes := make([]float64, len(stats))
-	finishedGames := 0
+    tricks := make([]float64, len(stats))
+    wars := make([]float64, len(stats))
+    deepWars := make([]float64, len(stats))
+    avgWarDepths := make([]float64, len(stats))
+    shufflesA := make([]float64, len(stats))
+    shufflesB := make([]float64, len(stats))
+    gameTimes := make([]float64, len(stats))
+    finishedGames := 0
 
-	for i, game := range stats {
-		tricks[i] = float64(game.Tricks)
-		wars[i] = float64(game.Wars)
-		shufflesA[i] = float64(game.ShufflesA)
-		shufflesB[i] = float64(game.ShufflesB)
-		gameTimes[i] = float64(game.GameDuration.Milliseconds())
-		if game.Finished {
-			finishedGames++
-		}
-	}
+    for i, game := range stats {
+        tricks[i] = float64(game.Tricks)
+        wars[i] = float64(game.Wars)
+        deepWars[i] = float64(game.DeepWars)
+        if game.Wars > 0 {
+            avgWarDepths[i] = float64(game.TotalWarDepth) / float64(game.Wars)
+        }
+        shufflesA[i] = float64(game.ShufflesA)
+        shufflesB[i] = float64(game.ShufflesB)
+        gameTimes[i] = float64(game.GameDuration.Minutes())
+        if game.Finished {
+            finishedGames++
+        }
+    }
 
-	printStatistic("Tricks", tricks)
-	printStatistic("Wars", wars)
-	printStatistic("Shuffles A", shufflesA)
-	printStatistic("Shuffles B", shufflesB)
-	fmt.Printf("Average game time: %.2f ms\n", average(gameTimes))
-	fmt.Printf("Finished games: %d (%.2f%%)\n", finishedGames, float64(finishedGames)/float64(len(stats))*100)
+    printStatistic("Tricks", tricks)
+    printStatistic("Wars", wars)
+    printStatistic("Deep Wars", deepWars)
+    printStatistic("Average War Depth", avgWarDepths)
+    printStatistic("Shuffles A", shufflesA)
+    printStatistic("Shuffles B", shufflesB)
+    
+    avgGameTime := average(gameTimes)
+    minGameTime, maxGameTime := minMax(gameTimes)
+    stdDevGameTime := standardDeviation(gameTimes, avgGameTime)
+    
+    fmt.Printf("Game Time (minutes): Avg %.2f (Min: %.2f, Max: %.2f, StdDev: %.2f)\n", 
+               avgGameTime, minGameTime, maxGameTime, stdDevGameTime)
+    fmt.Printf("Finished games: %d (%.2f%%)\n", finishedGames, float64(finishedGames)/float64(len(stats))*100)
 }
 
 func printStatistic(name string, data []float64) {
-	avg := average(data)
-	min, max := minMax(data)
-	stdDev := standardDeviation(data, avg)
+    avg := average(data)
+    min, max := minMax(data)
+    stdDev := standardDeviation(data, avg)
 
-	fmt.Printf("%s: Avg %.2f (Min: %.0f, Max: %.0f, StdDev: %.2f)\n", name, avg, min, max, stdDev)
+    fmt.Printf("%s: Avg %.2f (Min: %.0f, Max: %.0f, StdDev: %.2f)\n", name, avg, min, max, stdDev)
 }
 
 func average(data []float64) float64 {
-	sum := 0.0
-	for _, v := range data {
-		sum += v
-	}
-	return sum / float64(len(data))
+    sum := 0.0
+    for _, v := range data {
+        sum += v
+    }
+    return sum / float64(len(data))
 }
 
 func minMax(data []float64) (float64, float64) {
-	min, max := data[0], data[0]
-	for _, v := range data[1:] {
-		if v < min {
-			min = v
-		}
-		if v > max {
-			max = v
-		}
-	}
-	return min, max
+    min, max := data[0], data[0]
+    for _, v := range data[1:] {
+        if v < min {
+            min = v
+        }
+        if v > max {
+            max = v
+        }
+    }
+    return min, max
 }
 
 func standardDeviation(data []float64, mean float64) float64 {
-	sum := 0.0
-	for _, v := range data {
-		sum += math.Pow(v-mean, 2)
-	}
-	variance := sum / float64(len(data))
-	return math.Sqrt(variance)
+    sum := 0.0
+    for _, v := range data {
+        sum += math.Pow(v-mean, 2)
+    }
+    variance := sum / float64(len(data))
+    return math.Sqrt(variance)
 }
