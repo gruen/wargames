@@ -1,3 +1,6 @@
+// Copyright (c) 2024 michaelgruen.com (with help from Claude 3.5 Sonnet)
+// This software is licensed under the MIT License.
+
 package main
 
 import (
@@ -54,8 +57,8 @@ func main() {
 }
 
 func parseArgs() (int, int, bool, int64, int, int) {
-	handTime := flag.Int("hand", 100, "Time to play a hand (in milliseconds)")
-	shuffleTime := flag.Int("shuffle", 1000, "Time to shuffle (in milliseconds)")
+	handTime := flag.Int("hand", 500, "Time to play a hand (in milliseconds)")
+	shuffleTime := flag.Int("shuffle", 15000, "Time to shuffle (in milliseconds)")
 	includeJokers := flag.Bool("jokers", false, "Include jokers in the deck")
 	seed := flag.Int64("seed", 0, "Random seed (0 for current time)")
 	gamesToPlay := flag.Int("games", 100, "Number of games to play")
