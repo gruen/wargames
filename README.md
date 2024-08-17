@@ -2,7 +2,7 @@
 
 This Go application simulates the card game War and provides statistics on game outcomes. It allows for customization of various parameters and can run multiple games in a single simulation.
 
-Companion writeup on [michaelgruen.com](https://michaelgruen.com/)
+Companion writeup on [michaelgruen.com](https://michaelgruen.com/d/2024/what-am-i-in-for/)
 
 ## Features
 
@@ -31,12 +31,12 @@ go run main.go [flags]
 
 ### Flags
 
-- `-hand int`: Time to play a hand (in milliseconds, default 500, or 0.5 seconds)
-- `-shuffle int`: Time to shuffle (in milliseconds, default 15000, or 15 seconds)
+- `-hand int`: Time to play a hand (in milliseconds, default 500  \[0.5 seconds\])
+- `-shuffle int`: Time to shuffle (in milliseconds, default 15000 \[15 seconds\])
 - `-jokers`: Include jokers in the deck (default false)
 - `-seed int64`: Random seed (0 for current time, default 0)
 - `-games int`: Number of games to play (default 100)
-- `-maxtime int`: Maximum game time in milliseconds (default 3600000, i.e., 1 hour)
+- `-maxtime int`: Maximum game time in milliseconds (default 3600000 \[1 hour == 60min * 60sec * 1000ms\])
 
 ### Example
 
@@ -89,7 +89,7 @@ You can modify the source code to change core game mechanics or add new features
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Please feel free to submit a Pull Request with an accompanying explanation of changes/improvements.
 
 ## License
 
