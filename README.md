@@ -2,7 +2,7 @@
 
 This Go application simulates the card game War and provides statistics on game outcomes. It allows for customization of various parameters and can run multiple games in a single simulation.
 
-Companion writeup on [michaelgruen.com](https://michaelgruen.com/d/2024/what-am-i-in-for/)
+Companion writeup on [michaelgruen.com/d/2024/what-am-i-in-for/](https://michaelgruen.com/d/2024/what-am-i-in-for/)
 
 ## Features
 
@@ -90,6 +90,11 @@ You can modify the source code to change core game mechanics or add new features
 ## Contributing
 
 Contributions are welcome. Please feel free to submit a Pull Request with an accompanying explanation of changes/improvements.
+
+### Limitations
+
+- Double-counting drawTime during wars (in general, there's a 2x pause, so probably comes out in the wash.)
+- This was coded with an LLM. I found one or two minor logical errors, but didn't effect game time too dramatically.
 
 ## License
 

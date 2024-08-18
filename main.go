@@ -103,7 +103,7 @@ func playGame(handTime, shuffleTime int, includeJokers bool, maxGameTime int) Ga
 
     stats := GameStats{}
     totalTime := 0 // in milliseconds
-    maxTricks := 100000 // Safety mechanism to prevent infinite games
+    maxTricks := 10000000 // Safety mechanism to prevent infinite games
 
     for len(playerA.DrawPile) + len(playerA.WinningsPile) > 0 && 
         len(playerB.DrawPile) + len(playerB.WinningsPile) > 0 && 
@@ -126,7 +126,11 @@ func playGame(handTime, shuffleTime int, includeJokers bool, maxGameTime int) Ga
         cardB, shuffledB := drawCard(&playerB)
         stats.ShufflesA += shuffledA
         stats.ShufflesB += shuffledB
-        totalTime += (shuffledA + shuffledB) * shuffleTime
+
+		// Only add shuffle time once if either or both players shuffled
+		if shuffledA == 1 || shuffledB == 1 {
+			totalTime += shuffleTime
+		}
 
         if cardA.Rank == cardB.Rank {
             warPile := []Card{cardA, cardB}
